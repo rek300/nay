@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>게이밍 키보드 하드웨어 및 자석축·래피드 트리거 탐구</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0f1117;
+    --panel: #181b24;
+    --line: #2a2f3d;
+    --accent: #5eead4;
+    --accent2: #f472b6;
+    --accent3: #facc15;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: #05060a;
+    font-family: 'Noto Sans KR', sans-serif;
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  .deck { position: relative; width: 100vw; height: 100vh; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 5vh 8vw;
+    background: radial-gradient(circle at 85% 10%, #1b2030 0%, var(--bg) 60%);
+    opacity: 0; visibility: hidden;
+    transform: translateX(40px);
+    transition: opacity .45s ease, transform .45s ease, visibility .45s;
+  }
+  .slide.active { opacity: 1; visibility: visible; transform: translateX(0); }
+
+  .tag {
+    display: inline-block; font-size: 1.1rem; font-weight: 700;
+    color: var(--accent); letter-spacing: .05em;
+    border: 1px solid var(--accent); padding: .3rem .9rem; border-radius: 999px;
+    margin-bottom: 1.1rem; width: fit-content;
+  }
+  h1 { font-size: 3.2rem; font-weight: 900; line-height: 1.25; margin-bottom: 1rem; }
+  h2 { font-size: 2.4rem; font-weight: 900; margin-bottom: 1.1rem; }
+  h2 span { color: var(--accent); }
+  p.lead { font-size: 1.25rem; color: var(--muted); line-height: 1.7; margin-bottom: 1.4rem; }
+  .meta { font-size: 1.1rem; color: var(--muted); margin-top: 2rem; }
+
+  .grid { display: grid; gap: 1.2rem; }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 1rem; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 1.2rem 1.4rem;
+  }
+  .card h3 { font-size: 1.2rem; margin-bottom: .5rem; color: var(--accent); }
+  .card p { font-size: 1.02rem; line-height: 1.65; color: #d1d5db; }
+  .card.pink h3 { color: var(--accent2); }
+  .card.yellow h3 { color: var(--accent3); }
+
+  .flow {
+    display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+    margin: 1rem 0; font-size: 1.05rem;
+  }
+  .flow .step {
+    background: var(--panel); border: 1px solid var(--line);
+    padding: .6rem 1rem; border-radius: 10px; font-weight: 500;
+  }
+  .flow .arrow { color: var(--accent3); font-weight: 700; }
+
+  .formula {
+    background: #0b0d13; border: 1px dashed var(--accent);
+    border-radius: 12px; padding: .8rem 1.2rem;
+    font-size: 1.4rem; text-align: center; margin: .8rem 0;
+    font-family: 'Times New Roman', serif;
+  }
+
+  ul.bullets { list-style: none; font-size: 1.05rem; line-height: 1.75; }
+  ul.bullets li::before { content: "▸ "; color: var(--accent); font-weight: 700; }
+
+  .ending { text-align: center; align-items: center; }
+  .ending h1 { font-size: 3.6rem; }
+  .ending .sub { font-size: 1.4rem; color: var(--muted); margin-top: 1rem; }
+
+  /* 3D 씬 */
+  .scene-box { position: relative; background: #0b0d13; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .scene3d { width: 100%; height: 50vh; min-height: 300px; touch-action: none; cursor: grab; }
+  .scene3d:active { cursor: grabbing; }
+  .scene3d canvas { display: block; }
+  .hud {
+    position: absolute; top: 12px; left: 14px;
+    font-size: 1.05rem; font-weight: 700; color: var(--accent);
+    background: rgba(0,0,0,.45); padding: .35rem .7rem; border-radius: 8px;
+  }
+  .hud-state { color: var(--accent2); margin-left: .5rem; }
+  .hint { position: absolute; bottom: 10px; right: 14px; font-size: .85rem; color: var(--muted); }
+
+  /* 표 */
+  .cmp { width: 100%; border-collapse: collapse; font-size: 1rem; background: var(--panel); border-radius: 12px; overflow: hidden; }
+  .cmp th { background: #1f2433; color: var(--accent); padding: .65rem .8rem; text-align: left; font-weight: 700; }
+  .cmp td { padding: .55rem .8rem; border-top: 1px solid var(--line); color: #d1d5db; }
+  .cmp tr:hover td { background: #1c2130; }
+  .cmp td.yes { color: var(--accent); font-weight: 700; }
+  .cmp td.no { color: var(--accent2); font-weight: 700; }
+
+  /* 채널 호핑 (FHSS) 애니메이션 */
+  .hop { display: flex; gap: .4rem; margin: .8rem 0 .4rem; }
+  .hop span {
+    flex: 1; text-align: center; padding: .45rem 0;
+    border: 1px solid var(--line); border-radius: 8px;
+    font-size: .85rem; color: var(--muted);
+    animation: hopHL 1s steps(1) infinite;
+  }
+  @keyframes hopHL {
+    0%   { background: var(--accent2); color: #0b0d13; border-color: var(--accent2); }
+    12.5%{ background: var(--panel);   color: var(--muted); border-color: var(--line); }
+    100% { background: var(--panel);   color: var(--muted); border-color: var(--line); }
+  }
+
+  /* 무선 게이밍 흐름 */
+  .chain { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin-top: .6rem; }
+  .chain .node {
+    background: #0b0d13; border: 1px solid var(--accent);
+    color: var(--accent); padding: .55rem .9rem; border-radius: 10px; font-size: 1rem; font-weight: 500;
+  }
+  .chain .node.pk { border-color: var(--accent2); color: var(--accent2); }
+  .chain .arr { color: var(--accent3); font-weight: 700; }
+
+  /* 시장 그래프 */
+  .chart-box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 1.1rem 1.3rem; }
+  .chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: .4rem; }
+  .chart-head h3 { font-size: 1.15rem; color: var(--accent); }
+  .chart-head output { font-size: 1.05rem; font-weight: 700; color: var(--accent2); white-space: nowrap; }
+  .chart-svg { width: 100%; height: auto; display: block; }
+  .chart-svg .bar { fill: #3b4a63; cursor: pointer; transition: fill .15s; }
+  .chart-svg .bar.src { fill: var(--accent); }
+  .chart-svg .bar:hover { fill: #64748b; }
+  .chart-svg .bar.src:hover { fill: #99f6e4; }
+  .chart-svg .bar.on { fill: var(--accent2); }
+  .chart-svg .val { fill: #d1d5db; font-size: 13px; font-weight: 700; }
+  .chart-svg .yr { fill: var(--muted); font-size: 13px; }
+  .chart-ctrl { display: flex; align-items: center; gap: .8rem; margin-top: .6rem; font-size: .95rem; color: var(--muted); }
+  .chart-ctrl input { flex: 1; accent-color: var(--accent); }
+  .legend { display: flex; gap: 1rem; font-size: .9rem; color: var(--muted); margin-top: .4rem; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: .3rem; vertical-align: -1px; }
+
+  /* 시뮬레이터 */
+  .sim { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 1.2rem 1.4rem; }
+  .mode-row { display: flex; gap: .6rem; margin-bottom: 1rem; }
+  .mode-btn, .play-btn {
+    background: #0b0d13; color: var(--muted); border: 1px solid var(--line);
+    padding: .45rem .9rem; border-radius: 8px; cursor: pointer;
+    font-family: inherit; font-size: .95rem;
+  }
+  .mode-btn.active { color: #0b0d13; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .mode-btn:hover, .play-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .mode-btn.active:hover { color: #0b0d13; }
+
+  .sim-body { display: flex; gap: 1.6rem; align-items: flex-start; }
+  .gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: .4rem; }
+  .gauge {
+    position: relative; width: 74px; height: 300px;
+    background: #0b0d13; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  }
+  .fill {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 0;
+    background: linear-gradient(to top, var(--accent), var(--accent2));
+    transition: height .08s linear;
+  }
+  .act-line { position: absolute; left: 0; right: 0; bottom: 28.57%; border-top: 2px dashed var(--accent3); }
+  .act-line span { position: absolute; right: 4px; top: -20px; font-size: .75rem; color: var(--accent3); }
+  .ref-mark { position: absolute; left: 0; right: 0; height: 3px; background: #fff; bottom: 0; display: none; }
+  .gauge-scale { font-size: .8rem; color: var(--muted); display: flex; justify-content: space-between; width: 74px; }
+
+  .sim-info { flex: 1; display: flex; flex-direction: column; gap: .7rem; }
+  .sim-info label { font-size: 1rem; color: var(--muted); display: flex; justify-content: space-between; }
+  .sim-info output { color: var(--accent); font-weight: 700; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+
+  .lamp {
+    font-size: 1.4rem; font-weight: 900; text-align: center;
+    padding: .6rem; border-radius: 10px; border: 1px solid var(--line);
+    background: #0b0d13; color: var(--muted); transition: all .12s;
+  }
+  .lamp.on { background: var(--accent2); color: #0b0d13; border-color: var(--accent2); box-shadow: 0 0 18px rgba(244,114,182,.5); }
+
+  .log {
+    list-style: none; font-size: .9rem; color: var(--muted);
+    background: #0b0d13; border-radius: 8px; padding: .6rem .8rem; height: 110px; overflow: hidden;
+    font-family: 'Consolas', monospace; line-height: 1.5;
+  }
+  .log li.down { color: var(--accent2); }
+  .log li.up { color: var(--accent); }
+
+  .nav {
+    position: fixed; bottom: 2.2vh; left: 50%; transform: translateX(-50%);
+    display: flex; gap: .8rem; align-items: center; z-index: 10;
+  }
+  .nav button {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    padding: .5rem 1.1rem; border-radius: 8px; cursor: pointer;
+    font-family: inherit; font-size: .95rem;
+  }
+  .nav button:hover { border-color: var(--accent); color: var(--accent); }
+  .counter { font-size: .95rem; color: var(--muted); min-width: 60px; text-align: center; }
+
+  .progress {
+    position: fixed; top: 0; left: 0; height: 4px; background: var(--accent);
+    transition: width .4s ease; z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<div class="deck">
+
+  <!-- 1. 표지 -->
+  <section class="slide active">
+    <span class="tag">KEYBOARD RESEARCH REPORT</span>
+    <h1>게이밍 키보드 하드웨어 및<br><span style="color:var(--accent)">자석축·래피드 트리거</span> 심화 탐구</h1>
+    <p class="lead">키보드의 신호 전달 구조부터 자석축 센서, 래피드 트리거, 무선 게이밍 시대까지</p>
+    <p class="meta">작성자 : 10709 김승현</p>
+  </section>
+
+  <!-- 2. 1차시 -->
+  <section class="slide">
+    <span class="tag">1차시</span>
+    <h2>키보드 기본 하드웨어 <span>구조</span></h2>
+    <p class="lead">키보드는 스위치, 키 매트릭스, MCU, 도터보드로 구성되어 있습니다.</p>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>스위치 (Switch)</h3>
+        <p>신호의 출발점. 접점, 빛(광학), 자성의 변화로 회로를 열고 닫습니다.</p>
+      </div>
+      <div class="card">
+        <h3>키 매트릭스 (Key Matrix)</h3>
+        <p>행(Row)과 열(Column)을 교차시켜 입력을 전달합니다. 다이오드는 고스트 현상을 막습니다.</p>
+      </div>
+      <div class="card pink">
+        <h3>MCU</h3>
+        <p>키보드의 두뇌. 채터링과 고스트 현상을 정돈하고 스캔·폴링레이트를 연산합니다.</p>
+      </div>
+      <div class="card yellow">
+        <h3>도터보드 (Daughterboard)</h3>
+        <p>최종적으로 PC에 신호를 전달합니다. 무선 모델은 2.4GHz 안테나나 블루투스 모듈이 내장됩니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 2차시 -->
+  <section class="slide">
+    <span class="tag">2차시</span>
+    <h2>게임 인풋렉과 <span>디바운싱</span> 알고리즘</h2>
+    <p class="lead">인풋렉은 스위치를 누른 순간부터 화면에 반영되기까지의 총 지연 시간입니다.</p>
+    <div class="flow">
+      <div class="step">스위치 물리 입력</div><div class="arrow">➔</div>
+      <div class="step">MCU 스캔</div><div class="arrow">➔</div>
+      <div class="step">디바운싱 처리</div><div class="arrow">➔</div>
+      <div class="step">PC 전송</div>
+    </div>
+    <div class="grid grid-2" style="margin-top:.8rem">
+      <div class="card">
+        <h3>스캔레이트 vs 폴링레이트</h3>
+        <p>스캔레이트는 MCU가 입력을 감지하는 속도, 폴링레이트는 PC로 송신하는 주기입니다. 한쪽이 낮으면 신호 손실이 생기며, 아날로그 센서는 오버샘플링하기도 합니다.</p>
+      </div>
+      <div class="card">
+        <h3>디바운싱 방식 비교</h3>
+        <p><b>지연 방식:</b> 신호가 안정될 때까지 대기. 안전하지만 지연이 있습니다.<br>
+        <b>선응답 방식:</b> 즉시 전송 후 후속 입력 차단. 빠르지만 노후 스위치는 채터링이 생길 수 있습니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. 3차시 -->
+  <section class="slide">
+    <span class="tag">3차시</span>
+    <h2>게이밍 키보드 발전사와 <span>스위치 구동 방식</span></h2>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>접점식 기계식 (Mechanical)</h3>
+        <p>스템이 금속 접점에 부딪혀 신호를 보냅니다. 커스텀 호환성이 좋지만 디바운싱 지연과 내구성 한계가 있습니다.</p>
+      </div>
+      <div class="card pink">
+        <h3>광축 (Optical)</h3>
+        <p>레이저(적외선)를 가리거나 통과시켜 감지합니다. 접점이 없어 디바운싱이 불필요하고 내구성이 뛰어납니다.</p>
+      </div>
+      <div class="card yellow">
+        <h3>자석축 (Magnetic / HE·TMR)</h3>
+        <p>자기장 세기를 읽는 현재 게이밍 키보드의 결정체. 래피드 트리거를 지원합니다.</p>
+      </div>
+      <div class="card">
+        <h3>멤브레인 (Membrane)</h3>
+        <p>러버돔을 눌러 내부 필름이 닿으면 통전됩니다. 동시 입력 제한 등으로 현재 게이밍 레이스에서는 제외되었습니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 4차시 : 3D 애니메이션 -->
+  <section class="slide">
+    <span class="tag">4차시</span>
+    <h2>자석축 센서 <span>HE vs TMR</span></h2>
+    <div class="split">
+      <div class="scene-box">
+        <div class="scene3d" id="scene3d"></div>
+        <div class="hud" id="hud3d">깊이 0.00 mm <span class="hud-state" id="hud3dState">KEY UP</span></div>
+        <div class="hint">드래그로 회전</div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h3>HE (Hall Effect, 홀 효과)</h3>
+          <p>로런츠 힘으로 생긴 전압 차를 감지합니다. 전력 소모가 크고 미세 조절에 한계가 있습니다.</p>
+          <div class="formula">V<sub>H</sub> = R<sub>H</sub> × (I × B / t)</div>
+          <p style="font-size:.95rem;color:var(--muted)">센서가 얇고, 전류가 세며, 자석이 가까울수록 홀 전압이 커집니다.</p>
+        </div>
+        <div class="card pink">
+          <h3>TMR (터널 자성 저항)</h3>
+          <p>나노미터 단위 MTJ 3층 구조에서 양자 터널링을 이용합니다.</p>
+          <ul class="bullets" style="margin-top:.6rem;font-size:1rem">
+            <li>자화 방향 일치 → 저항 극도로 낮음</li>
+            <li>자화 방향 엇갈림 → 저항 폭발적 상승</li>
+            <li>노이즈 없는 거대한 신호, 0.01mm 수준 감지</li>
+            <li>소비 전력 극도로 낮음</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. 5차시 : 실시간 시뮬레이터 -->
+  <section class="slide">
+    <span class="tag">5차시</span>
+    <h2>래피드 트리거 <span>알고리즘</span></h2>
+    <div class="split">
+      <div class="col">
+        <div class="card">
+          <h3>고정 방식</h3>
+          <p>정해진 지점(1.0mm)을 통과해야 판정되어 복귀 딜레이가 생깁니다.</p>
+        </div>
+        <div class="card yellow">
+          <h3>래피드 트리거</h3>
+          <p>고정 지점 없이 상·하향 변위(Delta)가 생기는 순간 즉시 판단합니다.</p>
+        </div>
+        <ul class="bullets">
+          <li>① 1.0mm 통과 → Key DOWN</li>
+          <li>② 바닥에서 Delta만큼 올라오면 → Key UP</li>
+          <li>③ Delta만큼 다시 눌리면 → Key DOWN</li>
+        </ul>
+        <p style="font-size:1rem;color:var(--muted);line-height:1.6">
+          💡 극단적 민감도는 손떨림 오작동을 부르므로, TMR의 높은 신호대잡음비와 결합해야 안정적입니다.
+        </p>
+      </div>
+
+      <div class="sim">
+        <div class="mode-row">
+          <button class="mode-btn active" data-mode="fixed">고정 방식</button>
+          <button class="mode-btn" data-mode="rapid">래피드 트리거</button>
+        </div>
+        <div class="sim-body">
+          <div class="gauge-wrap">
+            <div class="gauge" id="gauge">
+              <div class="act-line"><span>1.0mm</span></div>
+              <div class="fill" id="fill"></div>
+              <div class="ref-mark" id="refMark"></div>
+            </div>
+            <div class="gauge-scale"><span>0</span><span>3.5</span></div>
+          </div>
+          <div class="sim-info">
+            <div class="lamp" id="lamp">KEY UP</div>
+            <label>손가락 깊이 <output id="depthOut">0.00 mm</output></label>
+            <input type="range" id="depth" min="0" max="3.5" step="0.01" value="0">
+            <label>감지 변위 Delta <output id="deltaOut">0.10 mm</output></label>
+            <input type="range" id="delta" min="0.05" max="0.5" step="0.01" value="0.10">
+            <button class="play-btn" id="play">▶ 시연 재생 (손떨림 포함)</button>
+            <ul class="log" id="log"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. 6차시 : 무선 키보드의 탄생 -->
+  <section class="slide">
+    <span class="tag">6차시</span>
+    <h2>무선 키보드의 <span>탄생과 전환</span></h2>
+    <p class="lead">첫 유선 키보드는 게이밍이 아니라 책상 위 선이 불편해 자유로운 자세로 쓰려는 편의성에서 출발했습니다.</p>
+    <div class="flow">
+      <div class="step">선 정리 (편의성)</div><div class="arrow">➔</div>
+      <div class="step">"인풋렉 긴 무선" 인식</div><div class="arrow">➔</div>
+      <div class="step">통신·MCU·전력 효율 발전</div><div class="arrow">➔</div>
+      <div class="step">유선 수준 성능, 게이밍 대세</div>
+    </div>
+    <div class="grid grid-2" style="margin-top:.6rem">
+      <div class="card">
+        <h3>블루투스 방식</h3>
+        <p>스마트폰, 태블릿, 노트북 등 여러 기기에 멀티페어링이 가능하고 전력 소모가 매우 적습니다. 다만 폴링레이트가 낮고(보통 125Hz 수준) 지연이 수십 ms 이상이라 경쟁형 게임에는 부적합합니다.</p>
+      </div>
+      <div class="card yellow">
+        <h3>2.4GHz RF 무선 (전용 동글)</h3>
+        <p>PC에 전용 수신기를 꽂아 독자 주파수 대역으로 통신합니다. 1000Hz 이상의 폴링레이트를 지원하고 지연을 1ms 이하로 줄여 무선 게이밍 시대를 연 일등 공신입니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. 6차시 : 비교표와 간섭 해결 -->
+  <section class="slide">
+    <span class="tag">6차시</span>
+    <h2>통신 방식 비교와 <span>간섭 해결</span></h2>
+    <table class="cmp">
+      <thead>
+        <tr><th>항목</th><th>블루투스</th><th>2.4GHz RF (동글)</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>멀티페어링</td><td class="yes">가능 (여러 기기)</td><td class="no">수신기 기준 연결</td></tr>
+        <tr><td>폴링레이트</td><td class="no">약 125Hz 수준</td><td class="yes">1000Hz 이상</td></tr>
+        <tr><td>지연 시간</td><td class="no">수십 ms 이상</td><td class="yes">1ms 이하</td></tr>
+        <tr><td>주요 용도</td><td>사무용, 가벼운 작업</td><td>경쟁형 게이밍</td></tr>
+      </tbody>
+    </table>
+
+    <div class="card pink" style="margin-top:1.2rem">
+      <h3>FHSS (주파수 도약 변조, Frequency Hopping Spread Spectrum)</h3>
+      <p>2.4GHz 대역은 와이파이, 블루투스, 전자레인지 등이 뒤섞인 혼잡한 구역입니다. 패킷이 간섭으로 손실되면 키 씹힘이 생기므로, 고성능 키보드는 깨끗한 채널을 밀리초 단위로 옮겨 다니며 송수신합니다.</p>
+      <div class="hop">
+        <span style="animation-delay:0s">CH 1</span>
+        <span style="animation-delay:-.125s">CH 2</span>
+        <span style="animation-delay:-.25s">CH 3</span>
+        <span style="animation-delay:-.375s">CH 4</span>
+        <span style="animation-delay:-.5s">CH 5</span>
+        <span style="animation-delay:-.625s">CH 6</span>
+        <span style="animation-delay:-.75s">CH 7</span>
+        <span style="animation-delay:-.875s">CH 8</span>
+      </div>
+      <p style="font-size:.9rem;color:var(--muted)">하이라이트가 이동하는 칸이 현재 사용 중인 채널입니다. 간섭이 있는 채널은 건너뜁니다.</p>
+    </div>
+  </section>
+
+  <!-- 9. 6차시 : 래피드 트리거 결합과 결론 -->
+  <section class="slide">
+    <span class="tag">6차시</span>
+    <h2>무선 환경과 <span>래피드 트리거</span>의 결합</h2>
+    <p class="lead">2차시의 폴링레이트, 5차시의 래피드 트리거, 4차시의 자석축 센서가 무선 환경에서도 그대로 구현됩니다.</p>
+    <div class="chain">
+      <div class="node">자석축 (HE/TMR)</div><div class="arr">➔</div>
+      <div class="node">0.01mm 단위 변화 감지</div><div class="arr">➔</div>
+      <div class="node pk">대량의 입력 데이터 생성</div><div class="arr">➔</div>
+      <div class="node">2.4GHz 무선으로 지연 없이 전송</div><div class="arr">➔</div>
+      <div class="node">PC</div>
+    </div>
+    <div class="grid grid-2" style="margin-top:1.6rem">
+      <div class="card">
+        <h3>선 정리를 넘어선 성능</h3>
+        <p>케이블 드래그 같은 물리적 장벽을 없애면서도 유선과 구별하기 어려운 초저지연 성능을 냅니다.</p>
+      </div>
+      <div class="card yellow">
+        <h3>현재 시장의 가장 진화된 형태</h3>
+        <p>무선 게이밍 키보드는 편의성 제품에서 출발해, 지금은 고성능 게이밍 키보드의 주류 형태로 자리 잡았습니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. 6차시 : 시장 그래프 -->
+  <section class="slide">
+    <span class="tag">6차시</span>
+    <h2>글로벌 무선 게이밍 시장 <span>추이</span></h2>
+    <div class="chart-box">
+      <div class="chart-head">
+        <h3>게이밍 마우스·키보드 시장 규모 (USD 백만)</h3>
+        <output id="yearOut"></output>
+      </div>
+      <svg class="chart-svg" id="mktChart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="chart-ctrl">
+        <span>연도 선택</span>
+        <input type="range" id="yearSlider" min="0" max="8" step="1" value="0">
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>출처 수치 (2024, 2032)</span>
+        <span><i style="background:#3b4a63"></i>CAGR 7.1%로 계산한 추정치</span>
+      </div>
+    </div>
+    <p style="font-size:.9rem;color:var(--muted);margin-top:.6rem;line-height:1.6">
+      출처: Credence Research, Gaming Mouse and Keyboards Market (2024년 기준 USD 1,428.5M, 2032년 전망 USD 2,472.84M). 무선 키보드만의 수치가 아니며 연도별 실측값이 아닌 추정치입니다. 막대를 클릭해도 연도를 선택할 수 있습니다.
+    </p>
+  </section>
+
+  <!-- 11. 핵심 정리 : 표 -->
+  <section class="slide">
+    <span class="tag">SUMMARY</span>
+    <h2>핵심 <span>비교 정리</span></h2>
+    <table class="cmp">
+      <thead>
+        <tr><th>방식</th><th>감지 원리</th><th>물리 접점</th><th>래피드 트리거</th><th>특징</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>접점식 기계식</td><td>금속 접점 통전</td><td>있음</td><td class="no">불가</td><td>호환성 우수, 내구성 한계</td></tr>
+        <tr><td>광축</td><td>레이저 차단·통과</td><td>없음</td><td class="no">불가</td><td>방수·방진, 내구성 우수</td></tr>
+        <tr><td>자석축 HE</td><td>홀 효과 (전압)</td><td>없음</td><td class="yes">지원</td><td>전력 소모 큼, 미세 조절 한계</td></tr>
+        <tr><td>자석축 TMR</td><td>터널 자기저항</td><td>없음</td><td class="yes">지원 (초정밀)</td><td>전력 극저, 0.01mm 수준 감지</td></tr>
+        <tr><td>멤브레인</td><td>필름 접촉 통전</td><td>있음</td><td class="no">불가</td><td>동시 입력 제한, 게이밍 레이스 제외</td></tr>
+      </tbody>
+    </table>
+    <div class="card yellow" style="margin-top:1.2rem">
+      <h3>인풋렉을 줄이는 세 축</h3>
+      <p>스캔·폴링레이트의 균형 있는 설정, 디바운싱 방식 선택(지연 vs 선응답), 그리고 무선이라면 FHSS와 2.4GHz 전용 통신이 입력 지연을 좌우합니다.</p>
+    </div>
+  </section>
+
+  <!-- 12. 마무리 -->
+  <section class="slide ending">
+    <span class="tag">THANK YOU</span>
+    <h1>감사합니다</h1>
+    <p class="sub">스위치 하나에 담긴 전자기학과 알고리즘, 그리고 무선 통신의 세계를 함께 살펴보았습니다.</p>
+    <p class="meta">10709 김승현 · 질의응답</p>
+  </section>
+
+</div>
+
+<div class="nav">
+  <button id="prev">◀ 이전</button>
+  <span class="counter" id="counter">1 / 12</span>
+  <button id="next">다음 ▶</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+  /* ===== 슬라이드 네비게이션 ===== */
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+
+  function show(index) {
+    if (index < 0 || index >= total) return;
+    slides[current].classList.remove('active');
+    current = index;
+    slides[current].classList.add('active');
+    document.getElementById('counter').textContent = `${current + 1} / ${total}`;
+    document.getElementById('progress').style.width = `${((current + 1) / total) * 100}%`;
+    if (window.stopPlay) window.stopPlay();
+  }
+
+  document.getElementById('prev').addEventListener('click', () => show(current - 1));
+  document.getElementById('next').addEventListener('click', () => show(current + 1));
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') show(current + 1);
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') show(current - 1);
+  });
+
+  /* ===== 4차시: 3D 자석축 스위치 ===== */
+  (function init3D() {
+    const wrap = document.getElementById('scene3d');
+    if (typeof THREE === 'undefined') {
+      wrap.innerHTML = '<p style="padding:2rem;color:#9ca3af">3D 라이브러리를 불러올 수 없습니다. 인터넷 연결을 확인하세요.</p>';
+      return;
+    }
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    wrap.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+    camera.position.set(0, 1.5, 9);
+    camera.lookAt(0, -0.2, 0);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.9);
+    dl.position.set(4, 6, 5);
+    scene.add(dl);
+
+    const world = new THREE.Group();
+    scene.add(world);
+
+    const mat = (color, opts = {}) =>
+      new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.45, metalness: 0.2 }, opts));
+    const box = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    const cyl = (r, h, m) => new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 32), m);
+
+    const pcb = box(3.4, 0.2, 3.4, mat(0x1f5e46));
+    pcb.position.y = -2.0;
+    world.add(pcb);
+
+    const sensorMat = mat(0x3b3b3b, { emissive: 0xfacc15, emissiveIntensity: 0 });
+    const sensor = box(0.6, 0.15, 0.6, sensorMat);
+    sensor.position.set(0, -1.83, 0);
+    world.add(sensor);
+
+    const housingMat = new THREE.MeshStandardMaterial({ color: 0x5eead4, transparent: true, opacity: 0.12, roughness: 0.2 });
+    const housing = box(3, 3.2, 3, housingMat);
+    housing.position.y = -0.3;
+    world.add(housing);
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(housing.geometry),
+      new THREE.LineBasicMaterial({ color: 0x5eead4 })
+    );
+    edges.position.copy(housing.position);
+    world.add(edges);
+
+    const key = new THREE.Group();
+    const stem = cyl(0.32, 1.0, mat(0xd1d5db));
+    stem.position.y = 0.1;
+    const magnet = cyl(0.36, 0.5, mat(0xf472b6, { emissive: 0x7a1d4f }));
+    magnet.position.y = -0.45;
+    const cap = box(2.0, 0.8, 2.0, mat(0x374151));
+    cap.position.y = 0.9;
+    key.add(stem, magnet, cap);
+    world.add(key);
+
+    const restY = 0.9;
+    const travel = 1.2;
+    const MAX_MM = 3.4;
+    const hud = document.getElementById('hud3d');
+    const hudState = document.getElementById('hud3dState');
+    let lastMm = -1, lastState = '';
+
+    let dragging = false, lastX = 0, dragRot = 0;
+    wrap.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; wrap.setPointerCapture(e.pointerId); });
+    wrap.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      dragRot += (e.clientX - lastX) * 0.01;
+      lastX = e.clientX;
+    });
+    wrap.addEventListener('pointerup', () => { dragging = false; });
+    wrap.addEventListener('pointercancel', () => { dragging = false; });
+
+    let lastW = 0, lastH = 0;
+    function resizeIfNeeded() {
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      if (w === lastW && h === lastH) return;
+      lastW = w; lastH = h;
+      renderer.setSize(w, h, false);
+      renderer.domElement.style.width = w + 'px';
+      renderer.domElement.style.height = h + 'px';
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+
+    const clock0 = performance.now();
+    function animate(now) {
+      requestAnimationFrame(animate);
+      resizeIfNeeded();
+      const time = (now - clock0) / 1000;
+
+      const t = (1 - Math.cos(time * 1.3)) / 2;
+      key.position.y = restY - t * travel;
+
+      const magnetBottom = key.position.y - 0.7;
+      const sensorTop = -1.755;
+      const gap = Math.max(0.05, magnetBottom - sensorTop);
+      const strength = Math.min(1, 0.6 / (gap * gap));
+      sensorMat.emissiveIntensity = strength * 1.2;
+      sensorMat.color.setRGB(0.23 + strength * 0.77, 0.23 + strength * 0.57, 0.23 * (1 - strength));
+
+      world.rotation.y = dragRot + Math.sin(time * 0.4) * 0.25;
+      world.rotation.x = -0.12;
+
+      const mm = t * MAX_MM;
+      const state = mm >= 1.0 ? 'KEY DOWN' : 'KEY UP';
+      const mmRounded = Math.round(mm * 100) / 100;
+      if (mmRounded !== lastMm) {
+        hud.firstChild.textContent = `깊이 ${mm.toFixed(2)} mm `;
+        lastMm = mmRounded;
+      }
+      if (state !== lastState) {
+        hudState.textContent = state;
+        hudState.style.color = state === 'KEY DOWN' ? 'var(--accent2)' : 'var(--accent)';
+        lastState = state;
+      }
+
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+  })();
+
+  /* ===== 5차시: 래피드 트리거 시뮬레이터 ===== */
+  (function initSim() {
+    const ACT = 1.0, MAX = 3.5;
+    const depthEl = document.getElementById('depth');
+    const deltaEl = document.getElementById('delta');
+    const depthOut = document.getElementById('depthOut');
+    const deltaOut = document.getElementById('deltaOut');
+    const fill = document.getElementById('fill');
+    const refMark = document.getElementById('refMark');
+    const lamp = document.getElementById('lamp');
+    const logEl = document.getElementById('log');
+    const playBtn = document.getElementById('play');
+    const modeBtns = document.querySelectorAll('.mode-btn');
+
+    let mode = 'fixed';
+    let pressed = false;
+    let ref = 0;
+    let armed = true;
+    let currentD = 0;
+    let playRAF = null;
+    let playStart = 0;
+
+    function stamp() {
+      return new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    }
+
+    function addLog(text, cls) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      if (cls) li.className = cls;
+      logEl.prepend(li);
+      while (logEl.children.length > 5) logEl.removeChild(logEl.lastChild);
+    }
+
+    function setPressed(next, d) {
+      if (next === pressed) return;
+      pressed = next;
+      addLog(`${stamp()}  ${pressed ? 'Key DOWN' : 'Key UP  '} @ ${d.toFixed(2)}mm`, pressed ? 'down' : 'up');
+    }
+
+    function evaluate(d) {
+      if (mode === 'fixed') {
+        setPressed(d >= ACT, d);
+        return;
+      }
+      const delta = parseFloat(deltaEl.value);
+
+      if (d < 0.3) armed = true;
+
+      if (!pressed) {
+        if (armed) {
+          if (d >= ACT) {
+            ref = d;
+            armed = false;
+            setPressed(true, d);
+          }
+        } else {
+          ref = Math.min(ref, d);
+          if (d - ref >= delta) {
+            setPressed(true, d);
+            ref = d;
+          }
+        }
+      } else {
+        ref = Math.max(ref, d);
+        if (ref - d >= delta) {
+          setPressed(false, d);
+          ref = d;
+        }
+      }
+    }
+
+    function render(d) {
+      depthOut.textContent = `${d.toFixed(2)} mm`;
+      deltaOut.textContent = `${parseFloat(deltaEl.value).toFixed(2)} mm`;
+      fill.style.height = `${(d / MAX) * 100}%`;
+
+      lamp.textContent = pressed ? 'KEY DOWN' : 'KEY UP';
+      lamp.classList.toggle('on', pressed);
+
+      if (mode === 'rapid' && !armed) {
+        refMark.style.display = 'block';
+        refMark.style.bottom = `${(ref / MAX) * 100}%`;
+      } else {
+        refMark.style.display = 'none';
+      }
+    }
+
+    function setDepth(d) {
+      currentD = Math.max(0, Math.min(MAX, d));
+      depthEl.value = currentD.toFixed(2);
+      evaluate(currentD);
+      render(currentD);
+    }
+
+    depthEl.addEventListener('input', () => {
+      stopPlay();
+      setDepth(parseFloat(depthEl.value));
+    });
+
+    deltaEl.addEventListener('input', () => {
+      evaluate(currentD);
+      render(currentD);
+    });
+
+    modeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        modeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        mode = btn.dataset.mode;
+        pressed = false;
+        armed = true;
+        ref = 0;
+        addLog(`── ${mode === 'fixed' ? '고정 방식' : '래피드 트리거'} 모드 ──`, '');
+        evaluate(currentD);
+        render(currentD);
+      });
+    });
+
+    function frame(now) {
+      const ph = (now - playStart) / 1000 * 2.2;
+      const d = 1.7 + 1.7 * Math.sin(ph) + 0.06 * Math.sin(ph * 9);
+      setDepth(d);
+      playRAF = requestAnimationFrame(frame);
+    }
+
+    function startPlay() {
+      playBtn.textContent = '■ 정지';
+      playStart = performance.now();
+      playRAF = requestAnimationFrame(frame);
+    }
+
+    function stopPlay() {
+      if (playRAF) cancelAnimationFrame(playRAF);
+      playRAF = null;
+      playBtn.textContent = '▶ 시연 재생 (손떨림 포함)';
+    }
+
+    playBtn.addEventListener('click', () => {
+      if (playRAF) stopPlay();
+      else startPlay();
+    });
+
+    window.stopPlay = stopPlay;
+    render(0);
+  })();
+
+  /* ===== 10페이지: 무선 게이밍 시장 그래프 ===== */
+  (function initChart() {
+    // 출처 수치 기준값 (Credence Research: 2024 = 1428.5, 2032 = 2472.84)
+    const MKT = { base: 2024, end: 2032, v0: 1428.5, v1: 2472.84 };
+    const CAGR = Math.pow(MKT.v1 / MKT.v0, 1 / (MKT.end - MKT.base)) - 1;
+
+    const years = [];
+    const values = [];
+    for (let y = MKT.base; y <= MKT.end; y++) {
+      years.push(y);
+      values.push(MKT.v0 * Math.pow(1 + CAGR, y - MKT.base));
+    }
+
+    const svg = document.getElementById('mktChart');
+    const slider = document.getElementById('yearSlider');
+    const out = document.getElementById('yearOut');
+    const W = 600, H = 320, P = 44, MAX = 2800;
+    const n = years.length;
+    const slot = (W - 2 * P) / n;
+    const bw = slot * 0.6;
+    let sel = 0;
+
+    function draw() {
+      let s = `<line x1="${P}" y1="${H - P}" x2="${W - P}" y2="${H - P}" stroke="#2a2f3d" stroke-width="1"/>`;
+      values.forEach((v, i) => {
+        const h = (v / MAX) * (H - 2 * P);
+        const x = P + i * slot + (slot - bw) / 2;
+        const y = H - P - h;
+        const isSrc = (i === 0 || i === n - 1);
+        const cls = ['bar', isSrc ? 'src' : '', i === sel ? 'on' : ''].join(' ').trim();
+        s += `<rect class="${cls}" data-i="${i}" x="${x}" y="${y}" width="${bw}" height="${h}" rx="4"/>`;
+        s += `<text class="val" x="${x + bw / 2}" y="${y - 7}" text-anchor="middle">${Math.round(v).toLocaleString('en-US')}</text>`;
+        s += `<text class="yr" x="${x + bw / 2}" y="${H - P + 18}" text-anchor="middle">${years[i]}</text>`;
+      });
+      svg.innerHTML = s;
+
+      const pct = ((values[sel] / values[0] - 1) * 100).toFixed(0);
+      out.textContent = `${years[sel]}년 · 약 $${Math.round(values[sel]).toLocaleString('en-US')}M (2024 대비 +${pct}%)`;
+    }
+
+    function select(i) {
+      sel = i;
+      slider.value = i;
+      draw();
+    }
+
+    slider.max = n - 1;
+    slider.addEventListener('input', () => select(parseInt(slider.value, 10)));
+
+    svg.addEventListener('click', (e) => {
+      const el = e.target.closest('.bar');
+      if (el) select(parseInt(el.dataset.i, 10));
+    });
+
+    draw();
+  })();
+
+  show(0);
+</script>
+</body>
+</html>
